@@ -11,7 +11,7 @@ local testDriveVeh, inTestDrive = 0, false
 local ClosestVehicle = 1
 local zones = {}
 
-function getShopInsideOf() 
+local function getShopInsideOf()
     for name, shop in pairs(Config.Shops) do -- foreach shop
         if insideZones[name] then
             return name
@@ -160,25 +160,15 @@ local function startTestDriveTimer(testDriveTime)
     end)
 end
 
-local function isInShop() 
-    for shopName, isInside in pairs(insideZones) do
-        if isInside then
-            return true
-        end
-    end
-
-    return false
-end
-
-local function createVehZones(shopName) -- This will create an entity zone if config is true that you can use to target and open the vehicle menu
+local function createVehZones(shopName, entity)
     if not Config.UsingTarget then
         for i = 1, #Config.Shops[shopName]['ShowroomVehicles'] do
             zones[#zones+1] = BoxZone:Create(
                 vector3(Config.Shops[shopName]['ShowroomVehicles'][i]['coords'].x,
                 Config.Shops[shopName]['ShowroomVehicles'][i]['coords'].y,
                 Config.Shops[shopName]['ShowroomVehicles'][i]['coords'].z),
-                2.75,
-                2.75, {
+                Config.Shops[shopName]['Zone']['size'],           --2.75
+                Config.Shops[shopName]['Zone']['size'], {
                 name="box_zone",
                 debugPoly=false,
             })
@@ -195,7 +185,7 @@ local function createVehZones(shopName) -- This will create an entity zone if co
             end
         end)
     else
-        exports['qb-target']:AddGlobalVehicle({
+        exports['qb-target']:AddTargetEntity(entity, {
             options = {
                 {
                     type = "client",
@@ -224,7 +214,6 @@ function createFreeUseShop(shopShape, name)
         minZ = shopShape.minZ,
         maxZ = shopShape.maxZ
     })
-    
     zone:onPlayerInOut(function(isPointInside)
         if isPointInside then
             insideZones[name] = true
@@ -289,7 +278,6 @@ function createManagedShop(shopShape, name, jobName)
         minZ = shopShape.minZ,
         maxZ = shopShape.maxZ
     })
-    
     zone:onPlayerInOut(function(isPointInside)
         if isPointInside then
             insideZones[name] = true
@@ -353,7 +341,7 @@ function createManagedShop(shopShape, name, jobName)
     end)
 end
 
-for name, shop in pairs(Config.Shops) do 
+for name, shop in pairs(Config.Shops) do
     if shop['Type'] == 'free-use' then
         createFreeUseShop(shop['Zone']['Shape'], name)
     elseif shop['Type'] == 'managed' then
@@ -362,6 +350,18 @@ for name, shop in pairs(Config.Shops) do
 end
 
 -- Events
+
+RegisterNetEvent('qb-vehicleshop:client:transferVehicle', function(buyerId, amount)
+    local ped = PlayerPedId()
+    local vehicle = GetVehiclePedIsIn(ped, false)
+    local plate = QBCore.Functions.GetPlate(vehicle)
+    local tcoords = GetEntityCoords(GetPlayerPed(GetPlayerFromServerId(buyerId)))
+    if #(GetEntityCoords(ped)-tcoords) < 5.0 then
+        TriggerServerEvent('qb-vehicleshop:server:transferVehicle', plate, buyerId, amount)
+    else
+        QBCore.Functions.Notify('The person you are selling to is too far away.')
+    end
+end)
 
 RegisterNetEvent('qb-vehicleshop:client:homeMenu', function()
     exports['qb-menu']:openMenu(vehicleMenu)
@@ -517,7 +517,7 @@ RegisterNetEvent('qb-vehicleshop:client:openFinance', function(data)
                 type = 'number',
                 isRequired = true,
                 name = 'paymentAmount',
-                text = 'Total Payments - Min '..Config.MaximumPayments
+                text = 'Total Payments - Max '..Config.MaximumPayments
             }
         }
     })
@@ -547,7 +547,7 @@ RegisterNetEvent('qb-vehicleshop:client:openCustomFinance', function(data)
             },
             {
                 text = "Server ID (#)",
-                name = "playerid", 
+                name = "playerid",
                 type = "number",
                 isRequired = true
             }
@@ -561,26 +561,32 @@ RegisterNetEvent('qb-vehicleshop:client:openCustomFinance', function(data)
 end)
 
 RegisterNetEvent('qb-vehicleshop:client:swapVehicle', function(data)
-    local shopName = getShopInsideOf()
+    local shopName = data.ClosestShop
     if Config.Shops[shopName]["ShowroomVehicles"][data.ClosestVehicle].chosenVehicle ~= data.toVehicle then
         local closestVehicle, closestDistance = QBCore.Functions.GetClosestVehicle(vector3(Config.Shops[shopName]["ShowroomVehicles"][data.ClosestVehicle].coords.x, Config.Shops[shopName]["ShowroomVehicles"][data.ClosestVehicle].coords.y, Config.Shops[shopName]["ShowroomVehicles"][data.ClosestVehicle].coords.z))
         if closestVehicle == 0 then return end
         if closestDistance < 5 then QBCore.Functions.DeleteVehicle(closestVehicle) end
-        Wait(250)
+        while DoesEntityExist(closestVehicle) do
+            Wait(50)
+        end
+        Config.Shops[shopName]["ShowroomVehicles"][data.ClosestVehicle].chosenVehicle = data.toVehicle
         local model = GetHashKey(data.toVehicle)
         RequestModel(model)
         while not HasModelLoaded(model) do
-            Citizen.Wait(250)
+            Wait(50)
         end
         local veh = CreateVehicle(model, Config.Shops[shopName]["ShowroomVehicles"][data.ClosestVehicle].coords.x, Config.Shops[shopName]["ShowroomVehicles"][data.ClosestVehicle].coords.y, Config.Shops[shopName]["ShowroomVehicles"][data.ClosestVehicle].coords.z, false, false)
-        SetModelAsNoLongerNeeded(model)
+        while not DoesEntityExist(veh) do
+            Wait(50)
+        end
+        SetModelAsNoLongerNeeded(model)        
         SetVehicleOnGroundProperly(veh)
         SetEntityInvincible(veh,true)
         SetEntityHeading(veh, Config.Shops[shopName]["ShowroomVehicles"][data.ClosestVehicle].coords.w)
         SetVehicleDoorsLocked(veh, 3)
         FreezeEntityPosition(veh, true)
-        SetVehicleNumberPlateText(veh, 'BUY ME')
-        Config.Shops[shopName]["ShowroomVehicles"][data.ClosestVehicle].chosenVehicle = data.toVehicle
+        SetVehicleNumberPlateText(veh, 'BUY ME') 
+        if Config.UsingTarget then createVehZones(shopName, veh) end
     end
 end)
 
@@ -600,7 +606,7 @@ RegisterNetEvent('qb-vehicleshop:client:getVehicles', function()
     QBCore.Functions.TriggerCallback('qb-vehicleshop:server:getVehicles', function(vehicles)
         local ownedVehicles = {}
         for k,v in pairs(vehicles) do
-            if v.balance then
+            if v.balance ~= 0 then
                 local name = QBCore.Shared.Vehicles[v.vehicle]["name"]
                 local plate = v.plate:upper()
                 ownedVehicles[#ownedVehicles + 1] = {
@@ -697,7 +703,7 @@ RegisterNetEvent('qb-vehicleshop:client:openIdMenu', function(data)
         inputs = {
             {
                 text = "Server ID (#)",
-                name = "playerid", 
+                name = "playerid",
                 type = "number",
                 isRequired = true
             }
@@ -718,16 +724,16 @@ end)
 CreateThread(function()
     for k,v in pairs(Config.Shops) do
         if v.showBlip then
-	    local Dealer = AddBlipForCoord(Config.Shops[k]["Location"])
-	    SetBlipSprite (Dealer, 326)
+            local Dealer = AddBlipForCoord(Config.Shops[k]["Location"])
+            SetBlipSprite (Dealer, Config.Shops[k]["blipSprite"])
             SetBlipDisplay(Dealer, 4)
-            SetBlipScale  (Dealer, 0.75)
-	    SetBlipAsShortRange(Dealer, true)
-	    SetBlipColour(Dealer, 3)
+            SetBlipScale  (Dealer, 0.70)
+            SetBlipAsShortRange(Dealer, true)
+            SetBlipColour(Dealer, Config.Shops[k]["blipColor"])
             BeginTextCommandSetBlipName("STRING")
-	    AddTextComponentSubstringPlayerName(Config.Shops[k]["ShopLabel"])
-	    EndTextCommandSetBlipName(Dealer)
-	end
+            AddTextComponentSubstringPlayerName(Config.Shops[k]["ShopLabel"])
+            EndTextCommandSetBlipName(Dealer)
+	 end
     end
 end)
 
@@ -766,8 +772,8 @@ CreateThread(function()
             SetEntityHeading(veh, Config.Shops[k]["ShowroomVehicles"][i].coords.w)
             FreezeEntityPosition(veh,true)
             SetVehicleNumberPlateText(veh, 'BUY ME')
+            if Config.UsingTarget then createVehZones(k, veh) end
         end
-			
-        createVehZones(k)
+        if not Config.UsingTarget then createVehZones(k) end
     end
 end)
