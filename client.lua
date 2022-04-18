@@ -220,48 +220,57 @@ function createFreeUseShop(shopShape, name)
             CreateThread(function()
                 while insideZones[name] do
                     setClosestShowroomVehicle()
-                    vehicleMenu = {
-                        {
-                            isMenuHeader = true,
-                            header = getVehBrand():upper().. ' '..getVehName():upper().. ' - $' ..getVehPrice(),
-                        },
-                        {
-                            header = 'Test Drive',
-                            txt = 'Test drive currently selected vehicle',
-                            params = {
-                                event = 'qb-vehicleshop:client:TestDrive',
+                    if name == "emergency" and PlayerData.job.name ~= "police" then 
+                        vehicleMenu = {
+                            {
+                                isMenuHeader = true,
+                                header = "You need to be a cop to shop here."
                             }
-                        },
-                        {
-                            header = "Buy Vehicle",
-                            txt = 'Purchase currently selected vehicle',
-                            params = {
-                                isServer = true,
-                                event = 'qb-vehicleshop:server:buyShowroomVehicle',
-                                args = {
-                                    buyVehicle = Config.Shops[getShopInsideOf()]["ShowroomVehicles"][ClosestVehicle].chosenVehicle
+                        }
+                    else
+                        vehicleMenu = {
+                            {
+                                isMenuHeader = true,
+                                header = getVehBrand():upper().. ' '..getVehName():upper().. ' - $' ..getVehPrice(),
+                            },
+                            {
+                                header = 'Test Drive',
+                                txt = 'Test drive currently selected vehicle',
+                                params = {
+                                    event = 'qb-vehicleshop:client:TestDrive',
                                 }
-                            }
-                        },
-                        {
-                            header = 'Finance Vehicle',
-                            txt = 'Finance currently selected vehicle',
-                            params = {
-                                event = 'qb-vehicleshop:client:openFinance',
-                                args = {
-                                    price = getVehPrice(),
-                                    buyVehicle = Config.Shops[getShopInsideOf()]["ShowroomVehicles"][ClosestVehicle].chosenVehicle
+                            },
+                            {
+                                header = "Buy Vehicle",
+                                txt = 'Purchase currently selected vehicle',
+                                params = {
+                                    isServer = true,
+                                    event = 'qb-vehicleshop:server:buyShowroomVehicle',
+                                    args = {
+                                        buyVehicle = Config.Shops[getShopInsideOf()]["ShowroomVehicles"][ClosestVehicle].chosenVehicle
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            header = 'Swap Vehicle',
-                            txt = 'Change currently selected vehicle',
-                            params = {
-                                event = 'qb-vehicleshop:client:vehCategories',
-                            }
-                        },
-                    }
+                            },
+                            {
+                                header = 'Finance Vehicle',
+                                txt = 'Finance currently selected vehicle',
+                                params = {
+                                    event = 'qb-vehicleshop:client:openFinance',
+                                    args = {
+                                        price = getVehPrice(),
+                                        buyVehicle = Config.Shops[getShopInsideOf()]["ShowroomVehicles"][ClosestVehicle].chosenVehicle
+                                    }
+                                }
+                            },
+                            {
+                                header = 'Swap Vehicle',
+                                txt = 'Change currently selected vehicle',
+                                params = {
+                                    event = 'qb-vehicleshop:client:vehCategories',
+                                }
+                            },
+                        }
+                    end
                     Wait(1000)
                 end
             end)
